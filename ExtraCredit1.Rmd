@@ -1,0 +1,193 @@
+---
+title: "Data607 - Global Baseline Estimates"
+author: "Anthony Josue Roman"
+date: "2024-09-16"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+```{r include=FALSE}
+require(readr)
+require(dplyr)
+require(tidyr)
+require(tidyverse)
+require(ggplot2)
+require(knitr)
+require(kableExtra)
+
+library(readr)
+library(dplyr)
+library(tidyr)
+library(tidyverse)
+library(ggplot2)
+library(knitr)
+library(kableExtra)
+```
+
+This assignment will use the following packages:
+
+```{r eval=FALSE}
+library(readr)
+library(dplyr)
+library(tidyr)
+library(tidyverse)
+library(ggplot2)
+library(knitr)
+library(kableExtra)
+```
+## General Overview
+
+This assignment for extra credit will utilize the data from Assignment 2 from my [GitHub page](https://github.com/spacerome/Data607_Assignment_2).
+
+This assignment will also be available on my [GitHub Repo](https://github.com/spacerome/Data607_EC_GBE).
+
+The purpose of this assignment is to utilize Global Baseline estimates to predict what critics would rate films that they did not see. Similar to what I mentioned on my previous assignment, there will be a scale of 1 to 5, where 1 is the lowest and 5 is the highest. If and only if there are critics that did not see such movie, the data will output as `NA`. The data set utilizes a random algorithm, which has each of the random 20 names generated to "rate" the 20 videos picked from the dataset taken from [MovieLens](https://grouplens.org/datasets/movielens/) and output a ratings file. The file was then combined into `movieratings.csv` for this assignment for simplification purposes.
+
+### Movie Ratings File Extraction
+
+We will first extract the data from the `movie_ratings.csv` file to gather the required variables from Assignment 2 utilizing the following code block:
+
+```{r echo =TRUE}
+
+# Initialize directory
+a <- getwd()
+setwd(a)
+
+movieRatings <- read.csv("movie_ratings.csv")
+
+```
+
+### Initializing Global Mean
+
+Here we have the `globalMean` equate to `2.965`. 
+
+```{r echo =TRUE}
+
+globalMean <- mean(movieRatings$rating, na.rm = TRUE)
+print(globalMean)
+
+```
+
+### Critics vs Global Mean
+
+The following table uses the following values to show the average ratings of each user, and the User Average subtracted by the `globalMean`. The `globalMeanUserAvg` subtracts `userAvg` with `globalMean`. This will be used further in the assignment. The number of digits was condensed into a format of `#.##` to make the tables a bit smaller.
+
+```{r echo=TRUE}
+
+averageUserRating <- movieRatings %>%
+  group_by(userName) %>%
+  summarise(userAvg = mean(rating, na.rm = TRUE)) %>%
+  mutate(globalMeanUserAvg = userAvg - globalMean)
+
+averageUserRating %>%
+  kable(col.names = c("Critic", "Average Rating", "User Average - Mean Movie"), digits = 2, align = 'lcc') %>%
+  kable_styling(full_width = FALSE, bootstrap_options = c("striped", "hover", "condensed"))
+
+```
+
+### Movies vs Global Mean
+
+The following table uses the following values to show the average ratings of each movie, and the Movie Average subtracted by the `globalMean`. The `globalMeanMovieAvg` subtracts `MovieAvg` with `globalMean`. This will be used further in the assignment. The number of digits was condensed into a format of `#.##` to make the tables a bit smaller.
+
+```{r echo=TRUE}
+
+averageUserRating <- movieRatings %>%
+  group_by(movieName) %>%
+  summarise(movieAvg = mean(rating, na.rm = TRUE)) %>%
+  mutate(globalMeanMovieAvg = movieAvg - globalMean)
+
+averageUserRating %>%
+  kable(col.names = c("Movie", "Average Rating", "Movie Average - Mean Movie"), digits = 2, align = 'lcc') %>%
+  kable_styling(full_width = FALSE, bootstrap_options = c("striped", "hover", "condensed"))
+
+```
+
+### Generating the Tables
+
+This code block will prepare the table to for the global base line estimate. Since the movie title numbers is greater than 10, I decided to split it apart to make it better visually. I also included a section to calculate the `Movie Average` on the last row to get the average of each movie in each column. The last column for the last row will be `NA`. Another line named `Movie Avg - Mean Movie` is going to output `Movie Average` subtracted by `globalMean`. After splitting the two tables, I will utilize the `knitr` and `kableExtra` packages to output the tables. The `wideRatings` will be utilized to calculate the mean rating for each critic, and will tkae the difference from `globalMean`. The columns that are for `userAvg` and `globalMeanUserAvg` will be renamed to `Average Rating` and `User Average - Mean Movie` respectively (combines the previous tables in a condensed format).
+
+```{r echo=TRUE}
+
+wideRatings <- movieRatings %>%
+  select(userName, movieName, rating) %>%
+  pivot_wider(names_from = movieName, values_from = rating)
+
+globalMean <- mean(movieRatings$rating, na.rm = TRUE)
+
+wideRatings <- wideRatings %>%
+  rowwise() %>%
+  mutate(userAvg = mean(c_across(where(is.numeric)), na.rm = TRUE),
+         globalMeanUserAvg = userAvg - globalMean)
+
+wideRatings <- wideRatings %>%
+  rename(Critic = userName, 
+         `Average Rating` = userAvg, 
+         `User Average - Mean Movie` = globalMeanUserAvg)
+
+moviecolumns <- colnames(wideRatings)[2:(ncol(wideRatings) - 2)]
+firsttenMovies <- moviecolumns[1:10]
+lasttenMovies  <- moviecolumns[11:20]
+
+firstMovieset <- wideRatings %>%
+  select(Critic, all_of(firsttenMovies), `Average Rating`, `User Average - Mean Movie`)
+
+secondMovieset <- wideRatings %>%
+  select(Critic, all_of(lasttenMovies), `Average Rating`, `User Average - Mean Movie`)
+
+firstMovieSetAvg <- movieRatings %>%
+  filter(movieName %in% firsttenMovies) %>%
+  group_by(movieName) %>%
+  summarise(movie_avg = mean(rating, na.rm = TRUE)) %>%
+  pivot_wider(names_from = movieName, values_from = movie_avg) %>%
+  mutate(Critic = "Movie Average", `Average Rating` = globalMean, `User Average - Mean Movie` = NA)
+
+secondMovieSetAvg <- movieRatings %>%
+  filter(movieName %in% lasttenMovies) %>%
+  group_by(movieName) %>%
+  summarise(movie_avg = mean(rating, na.rm = TRUE)) %>%
+  pivot_wider(names_from = movieName, values_from = movie_avg) %>%
+  mutate(Critic = "Movie Average", `Average Rating` = globalMean, `User Average - Mean Movie` = NA)
+
+firstMoviesetGAvg <- firstMovieSetAvg %>%
+  mutate(across(all_of(firsttenMovies), ~ . - globalMean)) %>%
+  mutate(Critic = "Movie Avg - Mean Movie", `Average Rating` = NA, `User Average - Mean Movie` = NA)
+
+secondMoviesetGAvg <- secondMovieSetAvg %>%
+  mutate(across(all_of(lasttenMovies), ~ . - globalMean)) %>%
+  mutate(Critic = "Movie Avg - Mean Movie", `Average Rating` = NA, `User Average - Mean Movie` = NA)
+
+firstMovieset <- bind_rows(firstMovieset, firstMovieSetAvg, firstMoviesetGAvg)
+secondMovieset <- bind_rows(secondMovieset, secondMovieSetAvg, secondMoviesetGAvg)
+
+```
+
+### First 10 Movies 
+
+This table outputs the first 10 movies with the Global Base Estimate:
+
+```{r echo = TRUE}
+
+firstMovieset %>%
+  kable(digits = 2, align = 'lcccccccccccc') %>%
+  kable_styling(full_width = FALSE, bootstrap_options = c("striped", "hover", "condensed"))
+
+```
+
+### Last 10 Movies
+
+This will output the last 10 movies with the Global Base Estimate:
+
+```{r echo = TRUE}
+
+secondMovieset %>%
+  kable(digits = 2, align = 'lcccccccccccc') %>%
+  kable_styling(full_width = FALSE, bootstrap_options = c("striped", "hover", "condensed"))
+
+```
+
+## Conclusion
+
+My initial plan was to utilize the large dataset that I had from [MovieLens](https://grouplens.org/datasets/movielens/), but this would have took a bit more time and I am still working with tables to make it better. I did experience a similar issue when I worked with GTFSR with my assignment in undergrad, but as I progress in this course, I believe like this can improve significantly. 
